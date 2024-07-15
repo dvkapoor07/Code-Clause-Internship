@@ -1,0 +1,128 @@
+package codeClauseProjects;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class WeatherApp {
+
+    private static final String API_KEY = "fe0607c3ae4547300a21e1b526a5bc5b"; // Replace with your actual API key
+    private static final String API_URL = "http://api.openweathermap.org/data/2.5/weather?q=%s&appid=%s";
+
+    public static void main(String[] args) {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+        boolean continueProgram = true;
+
+        while (continueProgram) {
+            try {
+                System.out.print("Enter city name: ");
+                String city = reader.readLine().trim();
+
+                String weatherReport = fetchWeather(city);
+                if (weatherReport != null) {
+                    System.out.println(weatherReport);
+                }
+            } catch (IOException e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+
+            // Ask user if they want to check weather for another city
+            System.out.print("Do you want to check the weather for another city? (yes/no): ");
+            try {
+                String retryInput = reader.readLine().trim().toLowerCase();
+                continueProgram = retryInput.equals("yes");
+            } catch (IOException ioException) {
+                continueProgram = false;
+            }
+        }
+    }
+
+    private static String fetchWeather(String city) {
+        try {
+            String apiUrl = String.format(API_URL, city, API_KEY);
+            URL url = new URL(apiUrl);
+
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 200) {
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                StringBuilder response = new StringBuilder();
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                return parseAndDisplayWeather(city, response.toString());
+            } else if (responseCode == 404) {
+                System.out.println("City not found: " + city + ". Please check the city name and try again.");
+            } else {
+                System.out.println("Error fetching weather data for " + city + ": HTTP response code " + responseCode);
+            }
+
+        } catch (IOException e) {
+            System.out.println("Error fetching weather data for " + city + ": " + e.getMessage());
+        }
+        return null;
+    }
+
+    private static String parseAndDisplayWeather(String city, String responseBody) {
+        try {
+            String temp = extractValue(responseBody, "\"temp\":", ",");
+            String feelsLike = extractValue(responseBody, "\"feels_like\":", ",");
+            String humidity = extractValue(responseBody, "\"humidity\":", "}");
+            String description = extractValue(responseBody, "\"description\":\"", "\"");
+            String windSpeed = extractValue(responseBody, "\"speed\":", ",");
+            String rain = extractValue(responseBody, "\"rain\":{\"1h\":", "}");
+            String thunderstorm = extractValue(responseBody, "\"main\":\"Thunderstorm\",\"description\":\"", "\"");
+            String icon = extractValue(responseBody, "\"icon\":\"", "\"");
+
+            double temperature = Double.parseDouble(temp);
+            double feelsLikeTemp = Double.parseDouble(feelsLike);
+            double wind = Double.parseDouble(windSpeed);
+            double rainChance = rain.isEmpty() ? 0 : Double.parseDouble(rain);
+
+            temperature = kelvinToCelsius(temperature);
+            feelsLikeTemp = kelvinToCelsius(feelsLikeTemp);
+
+            StringBuilder weatherReport = new StringBuilder();
+            weatherReport.append("\nWeather details for ").append(city).append(":");
+            weatherReport.append("\n-----------------------------");
+            weatherReport.append("\nTemperature: ").append(temperature).append("°C");
+            weatherReport.append("\nFeels like: ").append(feelsLikeTemp).append("°C");
+            weatherReport.append("\nHumidity: ").append(humidity).append("%");
+            weatherReport.append("\nWind Speed: ").append(wind).append(" m/s");
+            weatherReport.append("\nRain Chance (last hour): ").append(rainChance).append(" mm");
+            weatherReport.append("\nThunderstorm: ").append(thunderstorm);
+            weatherReport.append("\nDescription: ").append(description);
+            weatherReport.append("\nIcon: http://openweathermap.org/img/wn/").append(icon).append("@2x.png");
+            weatherReport.append("\n-----------------------------");
+
+            return weatherReport.toString();
+
+        } catch (Exception e) {
+            System.out.println("Error parsing weather data: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private static String extractValue(String json, String key, String endChar) {
+        int startIndex = json.indexOf(key);
+        if (startIndex == -1) {
+            return "";
+        }
+        startIndex += key.length();
+        int endIndex = json.indexOf(endChar, startIndex);
+        if (endIndex == -1) {
+            endIndex = json.length();
+        }
+        return json.substring(startIndex, endIndex);
+    }
+
+    private static double kelvinToCelsius(double kelvin) {
+        return kelvin - 273.15;
+    }
+}
